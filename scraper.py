@@ -55,7 +55,7 @@ class NepseStockScraper:
             if len(cells) < 9:
                 continue
 
-            s_no = cells[0].text.strip()
+            # s_no = cells[0].text.strip()
             symbol = cells[1].text.strip()
             open_price = cells[3].text.strip()
             high_price = cells[4].text.strip()
@@ -64,7 +64,7 @@ class NepseStockScraper:
             volume = cells[8].text.strip()
             data.append(
                 [
-                    s_no,
+                    # s_no,
                     symbol,
                     stock_date,
                     open_price,
@@ -91,6 +91,50 @@ class NepseStockScraper:
             max_date = pd.to_datetime(df_existing["Date"]).max()
             self.start_date = (max_date + timedelta(days=1)).strftime("%Y-%m-%d")
 
+    def format_datasets(self):
+        """
+        preprocessiing the raw/scraped .csv dataset into a standard format
+        """
+        # reading the CSV file with specified data types for numeric columns
+        data = pd.read_csv(
+            self.output_file,
+            dtype={"Open": str, "High": str, "Low": str, "Close": str, "Vol": str},
+            low_memory=False,
+        )
+
+        # revmoning '.csv' from the Date col and also converting to datetime
+        data["Date"] = pd.to_datetime(
+            data["Date"].str.replace(".csv", "", regex=False), errors="coerce"
+        )
+
+        def clean_numeric(column):
+            return pd.to_numeric(
+                column.str.replace(",", "", regex=False), errors="coerce"
+            )
+
+        def clean_numeric_volume(column):
+            return pd.to_numeric(
+                column.str.replace(",", "", regex=False), errors="coerce"
+            ).astype(int)
+
+        data["Open"] = clean_numeric(data["Open"])
+        data["High"] = clean_numeric(data["High"])
+        data["Low"] = clean_numeric(data["Low"])
+        data["Close"] = clean_numeric(data["Close"])
+        data["Vol"] = clean_numeric_volume(data["Vol"])
+
+        # dropping rows with 'nan' values
+        data.dropna(inplace=True)
+
+        # Removing duplicate rows
+        data.drop_duplicates(inplace=True)
+
+        # sorting the dataset with symbols alphabets and date col
+        data.sort_values(by=["Symbol", "Date"], inplace=True)
+
+        data.to_csv(self.output_file, index=False)
+        print(f"Preprocessing data success.\n\n File saved to : {self.output_file}")
+
     def run(self):
         self.setup_dates()
 
@@ -98,31 +142,19 @@ class NepseStockScraper:
             token = self.get_csrf_token(session)
             print(f"Fetched CSRF token: {token}")
 
-            with open(self.output_file, "w", newline="", encoding="utf-8") as f:
-                pd.DataFrame(
-                    columns=[
-                        "S.no",
-                        "Symbol",
-                        "Date",
-                        "Open",
-                        "High",
-                        "Low",
-                        "Close",
-                        "Vol",
-                    ]
-                ).to_csv(f, index=False)
+            # Check if the file exists
+            file_exists = os.path.isfile(self.output_file)
 
             for date in self.generate_dates(self.start_date, self.end_date):
                 time.sleep(random.uniform(1, 3))
-
                 try:
                     html, date = self.get_html(session, date, token)
                     data = self.parse_html(html, date)
                     if data:
+                        # append the scraped data after each successfull scrape
                         df = pd.DataFrame(
                             data,
                             columns=[
-                                "S.no",
                                 "Symbol",
                                 "Date",
                                 "Open",
@@ -132,15 +164,21 @@ class NepseStockScraper:
                                 "Vol",
                             ],
                         )
-                        df.to_csv(self.output_file, mode="a", header=False, index=False)
+                        # append data to CSV file, write headers if file does not exist
+                        df.to_csv(
+                            self.output_file,
+                            mode="a",
+                            header=not file_exists,
+                            index=False,
+                        )
+                        file_exists = True  # After the first write, file exists
                     print(f"Processed date: {date}, found data: {len(data)} entries")
                 except Exception as e:
                     print(f"Error processing date {date}: {e}")
 
-        df = pd.read_csv(self.output_file)
-        df_sorted = df.sort_values(by=["Symbol", "Date"])
-        df_unique = df_sorted.drop_duplicates()
-        df_unique.to_csv(self.output_file, index=False)
+        df = pd.read_csv(self.output_file,low_memory=False)
+        df.to_csv(self.output_file, index=False)
+        self.format_datasets()
 
         print(
             f"NEPSE stocks scraped successfully from {self.start_date} - {self.end_date}\n\n File saved to {self.output_file}"
