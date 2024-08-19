@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: "15 12 * * *" # Runs daily at 12:15 PM UTC, which is 6:00 PM in Asia/Kathmandu
 
+
+permissions:
+  contents: write
+
 jobs:
   scrape_data:
     runs-on: ubuntu-latest
@@ -30,11 +34,7 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "GitHub Actions"
           git add NEPSE_STOCKS_DATASETS.csv
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update stock data"
-            git push
-          fi
+          git commit -m "Update stock data"
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
