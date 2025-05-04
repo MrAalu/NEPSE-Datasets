@@ -3,6 +3,7 @@ name: Daily Stock Scraper by MrAalu
 on:
   schedule:
     - cron: "15 12 * * *" # Runs daily at 12:15 PM UTC, which is 6:00 PM in Asia/Kathmandu
+  workflow_dispatch:       # to manually run the workflow 
 
 
 permissions:
